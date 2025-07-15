@@ -1,0 +1,9 @@
+<launch>
+
+    <arg name="point_cloud_aggregated" default="/cloud_to_use"/>
+    
+    <node pkg="powerline_mapper" exec="powerline_mapper_node" respawn="true" output="screen">
+        <param name="point_cloud_topic" value="$(var point_cloud_aggregated)"/>
+    </node>
+
+</launch>
