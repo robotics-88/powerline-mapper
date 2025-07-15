@@ -40,9 +40,10 @@ PowerlineMapper::PowerlineMapper()
       origin_y_(-250),
       tf_buffer_(this->get_clock()),
       tf_listener_(tf_buffer_),
-      detection_enabled_(true),
       ground_filter_height_(1.0),
-      ground_elevation_(0.0) {
+      ground_elevation_(0.0),
+      is_active_(false)
+{
     // Get params
     std::string pointcloud_out_topic;
     this->declare_parameter("point_cloud_topic", point_cloud_topic_);
@@ -62,10 +63,41 @@ PowerlineMapper::PowerlineMapper()
 
     // Initialize OpenCV image
     distance_matrix_ = cv::Mat(image_size_, CV_32F, std::numeric_limits<float>::max());
+
+    param_subscriber_ = std::make_shared<rclcpp::ParameterEventHandler>(this);
+    startParamMonitoring(); // Use timer to wait for task_manager to load perception registry
 }
 
 PowerlineMapper::~PowerlineMapper() {
     saveGeoTIFF();
+}
+
+void PowerlineMapper::parameterCallback(const rclcpp::Parameter &param) {
+    is_active_ = param.as_bool();
+    RCLCPP_INFO(this->get_logger(), "Powerline mapper node active: %s", is_active_ ? "true" : "false");
+}
+
+void PowerlineMapper::startParamMonitoring() {
+    param_monitor_timer_ = this->create_wall_timer(
+        std::chrono::seconds(1),
+        [this]() {
+            static bool callback_registered = false;
+
+            if (!callback_registered) {
+                try {
+                    cb_handle_ = param_subscriber_->add_parameter_callback(
+                        "/task_manager/powerline_mapper/set_node_active",
+                        std::bind(&PowerlineMapper::parameterCallback, this, std::placeholders::_1),
+                        "task_manager/task_manager"
+                    );
+                    RCLCPP_INFO(this->get_logger(), "✅ Parameter callback registered for task_manager:powerline_mapper/set_node_active");
+                    callback_registered = true;
+                    param_monitor_timer_->cancel();  // stop retrying
+                } catch (const std::exception &e) {
+                    RCLCPP_WARN(this->get_logger(), "Waiting for task_manager param to become available: %s", e.what());
+                }
+            }
+        });
 }
 
 void PowerlineMapper::poseCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
@@ -73,9 +105,7 @@ void PowerlineMapper::poseCallback(const geometry_msgs::msg::PoseStamped::Shared
 }
 
 void PowerlineMapper::pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-    if (!detection_enabled_) {
-        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
-                             "⚠ Waiting for MAV altitude > 5m...");
+    if (!is_active_) {
         return;
     }
 

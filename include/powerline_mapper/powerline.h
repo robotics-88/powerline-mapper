@@ -39,17 +39,26 @@ class PowerlineMapper : public rclcpp::Node {
     double origin_x_, origin_y_;
     tf2_ros::Buffer tf_buffer_;
     tf2_ros::TransformListener tf_listener_;
-    bool detection_enabled_;
     double ground_filter_height_;
     double ground_elevation_;
     geometry_msgs::msg::PoseStamped::SharedPtr
         current_pose_; // Store the latest pose for elevation requests
+
 
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr point_cloud_subscriber_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr powerline_pub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr distance_pub_;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
+
+    // Parameter handling for toggle on/off
+    bool is_active_;
+    std::shared_ptr<rclcpp::ParameterEventHandler> param_subscriber_;
+    std::shared_ptr<rclcpp::ParameterCallbackHandle> cb_handle_;
+    rclcpp::TimerBase::SharedPtr param_monitor_timer_;
+    void parameterCallback(const rclcpp::Parameter &param);
+    void startParamMonitoring();
+    // End parameter handling
 
     void poseCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
     void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
